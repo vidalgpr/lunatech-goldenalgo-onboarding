@@ -34,11 +34,14 @@ lazy val server = (project in file("server"))
     libraryDependencies ++= Seq(
       "com.typesafe.akka" %% "akka-http"        % "10.2.4",
       "de.heikoseeberger" %% "akka-http-circe"  % "1.36.0",
-      "com.typesafe.akka" %% "akka-stream"      % "2.6.15",
-      "com.typesafe.akka" %% "akka-actor-typed" % "2.6.15",
+      "com.typesafe.akka" %% "akka-stream"      % "2.6.16",
+      "com.typesafe.akka" %% "akka-actor-typed" % "2.6.16",
       "io.circe"          %% "circe-core"       % "0.13.0",
       "io.circe"          %% "circe-generic"    % "0.13.0",
-      "io.circe"          %% "circe-parser"     % "0.13.0"
+      "io.circe"          %% "circe-parser"     % "0.13.0",
+      //elastic4s
+      "com.sksamuel.elastic4s" %% "elastic4s-client-akka" % "7.14.1",
+      "com.sksamuel.elastic4s" %% "elastic4s-json-circe" % "7.14.1",
     )
   )
 

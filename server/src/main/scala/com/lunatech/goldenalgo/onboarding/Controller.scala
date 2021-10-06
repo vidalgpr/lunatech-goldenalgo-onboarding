@@ -2,17 +2,22 @@ package com.lunatech.goldenalgo.onboarding
 
 import akka.actor.ActorSystem
 import akka.stream.Materializer
+import akka.event.LoggingAdapter
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.Route
+import akka.http.scaladsl.server.{Route, StandardRoute}
 import akka.http.scaladsl.model._
 import io.circe.syntax._
 import io.circe.parser.decode
 import com.sksamuel.elastic4s.circe._
 import com.sksamuel.elastic4s.{RequestSuccess, RequestFailure}
-import com.lunatech.goldenalgo.onboarding.adapter.DBConnector
+import com.sksamuel.elastic4s.requests.update.UpdateResponse
+import com.sksamuel.elastic4s.requests.indexes.IndexResponse
+import com.sksamuel.elastic4s.Response
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
 import scala.util.{Success, Failure}
+import scala.concurrent.Future
+import com.lunatech.goldenalgo.onboarding.adapter.DBConnector
 
 class Controller()(
     implicit val ec: ExecutionContext,
@@ -24,59 +29,94 @@ class Controller()(
   def toHttpEntity(payload: String) =
     HttpEntity(ContentTypes.`application/json`, payload)
 
-  db.initIdx()
+  def getRecipesFromParameters(
+      searchParams: Seq[(String, String)]
+  ): StandardRoute =
+    complete(
+      db.multiSearchQuery(searchParams)
+        .map(_.result.to[Recipe])
+        .map(_.asJson.noSpaces)
+        .map(toHttpEntity)
+    )
 
-  val getRecipeRoute: Route = {
-    parameter(Symbol("id")) { (recipeId: String) =>
-      get {
-        complete(
-          db.matchQueryIdx("id", recipeId)
-            .map(_.result.to[Recipe])
-            .map(_.asJson.noSpaces)
-            .map(toHttpEntity)
-        )
-      }
-    } ~ parameter(Symbol("name")) { (recipeName: String) =>
-      get {
-        complete(
-          db.matchQueryIdx("name", recipeName)
-            .map(_.result.to[Recipe])
-            .map(_.asJson.noSpaces)
-            .map(toHttpEntity)
-        )
+  def upsertRecipeRoute(
+      f: Recipe => Future[Response[Either[UpdateResponse, IndexResponse]]]
+  ) = (request: HttpRequest, log: LoggingAdapter) => {
+    val entity = request.entity
+    val strictEntity = entity.toStrict(2.seconds)
+    val recipe = strictEntity
+      .map(_.data.utf8String)
+      .map(decode[Recipe](_))
+
+    onComplete(recipe) {
+      _.flatMap(_.toTry) match {
+        case Success(recipe) =>
+          log.info(s"Got recipe: $recipe")
+          complete(
+            f(recipe).map {
+              case RequestSuccess(status, body, headers, result) =>
+                val docId = result.fold(_.id, _.id)
+                log.info(s"successfully updated id=$docId")
+                StatusCodes.Created
+
+              case RequestFailure(status, body, headers, error) =>
+                log.error(s"$status error updating recipe $error")
+                StatusCodes.InternalServerError
+            }
+          )
+
+        case Failure(ex) => failWith(ex)
       }
     }
   }
 
-  lazy val postRecipeRoute = {
+  val getRecipeRoute: Route = get {
+    concat(
+      parameter("id") { recipeId =>
+        getRecipesFromParameters(Seq(("_id", recipeId)))
+      },
+      parameter("name") { recipeName =>
+        getRecipesFromParameters(Seq(("name", recipeName)))
+      },
+      parameters("ingredient".repeated) { ingredients =>
+        getRecipesFromParameters(ingredients.map(i => ("ingredients", i)).toSeq)
+      }
+    )
+  }
+
+  lazy val getAllRecipesRoute: Route = (get & pathEndOrSingleSlash) {
+    complete(
+      db.searchAll()
+        .map(_.result.to[Recipe])
+        .map(_.asJson.noSpaces)
+        .map(toHttpEntity)
+    )
+  }
+
+  lazy val updateRecipeRoute =
+    (put & pathEndOrSingleSlash & extractRequest & extractLog) {
+      upsertRecipeRoute(r => db.updateDocumentById(r, r.id).map(_.map(Left(_))))
+    }
+  lazy val postRecipeRoute =
     (post & pathEndOrSingleSlash & extractRequest & extractLog) {
-      (request, log) =>
-        val entity = request.entity
-        val strictEntity = entity.toStrict(2.seconds)
-        val recipe = strictEntity
-          .map(_.data.utf8String)
-          .map(decode[Recipe](_))
+      upsertRecipeRoute(r => db.indexWithId(r, r.id).map(_.map(Right(_))))
+    }
 
-        onComplete(recipe) {
-          _.flatMap(_.toTry) match {
-            case Success(recipe) =>
-              log.info(s"Got recipe: $recipe")
-
-              complete(
-                db.idxInto(recipe).map {
-                  case RequestSuccess(_, _, _, _) => StatusCodes.OK
-                  case RequestFailure(_, _, _, _) => StatusCodes.InternalServerError
-                }
-              )
-
-            case Failure(ex) => failWith(ex)
-          }
-        }
+  lazy val deleteRecipeRoute: Route = delete {
+    parameter("id") { id =>
+      val deleteFuture = db.deleteDocumentById(id)
+      onComplete(deleteFuture) {
+        case Success(r)  => complete(StatusCodes.OK)
+        case Failure(ex) => failWith(ex)
+      }
     }
   }
 
   lazy val routes: Route = concat(
-    path("api" / "recipes")(getRecipeRoute),
-    path("recipe" / "test_upload")(postRecipeRoute)
+    path("api" / "search_recipes" / "all")(getAllRecipesRoute),
+    path("api" / "search_recipes")(getRecipeRoute),
+    path("api" / "upload_recipe")(postRecipeRoute),
+    path("api" / "delete_recipe")(deleteRecipeRoute),
+    path("api" / "update_recipe")(updateRecipeRoute)
   )
 }

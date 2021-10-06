@@ -6,8 +6,12 @@ import com.sksamuel.elastic4s.akka.{AkkaHttpClient, AkkaHttpClientSettings}
 import com.sksamuel.elastic4s.requests.common.RefreshPolicy
 import com.sksamuel.elastic4s.{ElasticRequest, ElasticClient}
 import com.sksamuel.elastic4s.fields.TextField
-import com.sksamuel.elastic4s.requests.searches.SearchResponse
-import com.sksamuel.elastic4s.requests.indexes.CreateIndexResponse
+import com.sksamuel.elastic4s.requests.searches.{
+  SearchResponse,
+  MultiSearchResponse
+}
+import com.sksamuel.elastic4s.requests.delete.DeleteResponse
+import com.sksamuel.elastic4s.requests.update.UpdateResponse
 import scala.concurrent.Future
 
 class DBConnector(host: Option[String], index: Option[String])(implicit
@@ -27,24 +31,48 @@ class DBConnector(host: Option[String], index: Option[String])(implicit
     )
   )
 
-  def initIdx(): Response[CreateIndexResponse] = client.execute {
-    createIndex(idx)
-  }.await
-
-  def idxInto[T](input: T)(implicit c: Indexable[T]) = client.execute {
-    indexInto(idx)
-      .doc(input)
-      .refresh(rp)
-  }
-
-  def queryIdx(keyword: String): Future[Response[SearchResponse]] =
+  def indexWithId[T](input: T, id: String)(implicit c: Indexable[T]) =
     client.execute {
-      search(idx).query(keyword)
+      indexInto(idx)
+        .id(id)
+        .doc(input)
+        .refresh(rp)
     }
 
-  def matchQueryIdx(field: String, keyword: String): Future[Response[SearchResponse]] =
+  def searchAll(): Future[Response[SearchResponse]] =
     client.execute {
-      search(idx).matchQuery(field, keyword)
+      search(idx)
+    }
+
+  def termQuerySearch(
+      field: String,
+      keyword: String
+  ): Future[Response[SearchResponse]] =
+    client.execute {
+      search(idx).termQuery(field, keyword)
+    }
+
+  def multiSearchQuery(
+      searchFor: Seq[(String, String)]
+  ): Future[Response[MultiSearchResponse]] = client.execute {
+    multi(
+      for (searchParameter <- searchFor)
+        yield search(idx).termQuery(searchParameter)
+    )
+  }
+
+  def deleteDocumentById(id: String): Future[Response[DeleteResponse]] =
+    client.execute {
+      deleteById(idx, id)
+    }
+
+  def updateDocumentById[T](input: T, id: String)(implicit
+      c: Indexable[T]
+  ): Future[Response[UpdateResponse]] =
+    client.execute {
+      updateById(idx, id)
+        .doc(input)
+        .refresh(rp)
     }
 
   def close(): Unit = client.close()

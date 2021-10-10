@@ -14,32 +14,62 @@ object Home {
       ctl: RouterCtl[AppRouter.Page]
   )
 
-  case class State(editText: String)
+  def onFieldChange(field: String)(implicit backend: Backend): ReactEventFromInput => Callback = e =>
+    Callback {
+      field match {
+        case "name"         => backend.setRecipeName(e.target.value)
+        case "ingredients"  => backend.setRecipeIngredients(e.target.value)
+        case "instructions" => backend.setRecipeInstructions(e.target.value)
+        case _              =>
+      }
+    }
 
-  def component(backend: Backend) =
+  def onSubmitButton()(implicit backend: Backend): Callback = for {
+    _ <- Callback(backend.setRecipeId())
+    _ <- Callback.alert("Recipe posted!")
+    // _ <- Callback(backend.resetRecipe())
+  } yield ()
+
+  def component(implicit backend: Backend) =
     ScalaComponent
       .builder[Props]("Home")
       .render_P { p =>
         <.div(
-          <.h3("My Awesome Recipe"),
-          <.p("RecipeName = ", <.b(backend.getRecipe.toString)),
-          <.button(
-            ^.onClick --> {
-              CallbackTo(backend.updateRecipeName())
-            },
-            "UpdateName"
+          <.h2("My Awesome Recipe", ^.textAlign := "center"),
+          <.br,
+          <.p(
+            "Current Recipe = ",
+            <.b(backend.recipe.toString),
+            ^.textAlign := "center"
           ),
-          <.button(
-            ^.onClick --> {
-              CallbackTo(backend.resetRecipe())
-            },
-            "ResetRecipe"
+          <.form(
+            ^.textAlign := "center",
+            ^.onSubmit --> onSubmitButton(),
+            <.input.text(
+              ^.onChange ==> onFieldChange("name"),
+              ^.value := backend.recipe.name,
+              ^.size  := 50
+            ),
+            <.br,
+            <.input.text(
+              ^.onChange ==> onFieldChange("ingredients"),
+              ^.placeholder := "Ingredients: chickpeas, lettuce, ...",
+              ^.value       := backend.recipe.ingredients.mkString(", "),
+              ^.size        := 50
+            ),
+            <.br,
+            <.input.text(
+              ^.onChange ==> onFieldChange("instructions"),
+              ^.placeholder := "Steps: 1, 2, 3, ...",
+              ^.value       := backend.recipe.instructions.mkString(", "),
+              ^.size        := 50
+            ),
+            <.br,
+            <.input.submit()
           )
         )
       }
       .build
-
-  def render(p: Props, s: State): VdomElement = ???
 
   def apply(
       backend: Backend,

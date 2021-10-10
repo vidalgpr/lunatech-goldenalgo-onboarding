@@ -6,31 +6,36 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.util.{ Failure, Success }
 import japgolly.scalajs.react.Callback
 import japgolly.scalajs.react.CallbackTo
-import diode.{Dispatcher, ModelRO}
+import diode.{ Dispatcher, ModelRO }
 
 // counter is our stateful RootModel
-class Backend(recipe: ModelRO[AppModel], dispatch: Dispatcher) {
-  
+class Backend(rootModel: ModelRO[AppModel], dispatch: Dispatcher) {
+
   def fetchRecipes(): Unit = Ajax.get("/recipes").onComplete {
     case Success(xhr) => decode[List[Recipe]](xhr.responseText)
-    case Failure(t) => println("An error has occurred: " + t.getMessage)
-  }
-
-  def searchRecipeById(id: String): Unit = Ajax.get(s"api/search_recipes/?id=$id").onComplete {
-    case Success(xhr) => decode[Recipe](xhr.responseText)
     case Failure(t)   => println("An error has occurred: " + t.getMessage)
   }
 
-  def resetRecipe(): Unit = dispatch(ResetRecipe)
-
-  def updateRecipeName(): Unit = Ajax.get("api/search_recipes/all").onComplete {
+  def searchRecipeById(id: String): Unit = Ajax.get(s"api/search_recipes/?id=$id").onComplete {
     case Success(xhr) =>
-      decode[Seq[Recipe]](xhr.responseText).fold(
-        ex => println("Unable to decode input: " + ex.getMessage),
-        _ => dispatch(UpdateRecipeName("UPDATED"))
+      val recipe = decode[Recipe](xhr.responseText).fold(
+        x => println("Unable to decode input: " + x.getMessage),
+        r => dispatch(SetRecipe(r))
       )
     case Failure(t) => println("An error has occurred: " + t.getMessage)
   }
 
-  def getRecipe: Recipe = recipe.value.recipe
+  def resetRecipe(): Unit = dispatch(ResetRecipe)
+  
+  def setRecipeName(name: String): Unit = dispatch(SetRecipeName(name))
+
+  def setRecipeIngredients(ingredients: String): Unit = dispatch(SetRecipeIngredients(ingredients.split(',').toSeq))
+
+  def setRecipeInstructions(instructions: String): Unit = dispatch(SetRecipeInstructions(instructions.split(',').toSeq))
+
+  def setRecipeId(): Unit = dispatch(SetRecipeId())
+
+  def postRecipe(recipe: Recipe): Unit = ???
+
+  def recipe: Recipe = rootModel.value.recipe
 }

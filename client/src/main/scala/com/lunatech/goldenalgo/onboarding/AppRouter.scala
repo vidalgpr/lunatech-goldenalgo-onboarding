@@ -15,10 +15,7 @@ object AppRouter {
 
     import dsl._
 
-    val counterConnection = AppCircuit.connect(_.recipe)
-    val backend = new Backend(AppCircuit.zoom(x => x), AppCircuit)
-    
-    val homeRoute = staticRoute(root, Page.Home) ~> renderR(ctl => counterConnection(p => Home(backend, ctl)))
+    val homeRoute = staticRoute(root, Page.Home) ~> renderR(Home(_))
     val notFound = staticRoute("#notfound", Page.NotFound) ~> render(<.h2("NOT FOUND"))
 
     homeRoute.notFound { _ =>

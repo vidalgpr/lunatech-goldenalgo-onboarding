@@ -10,7 +10,6 @@ import diode.{ Dispatcher, Effect, ModelRO }
 import scala.concurrent.Future
 import diode.EffectSingle
 
-// counter is our stateful RootModel
 object BackendService {
 
   def fetchRecipes(): Unit = Ajax.get("/recipes").onComplete {

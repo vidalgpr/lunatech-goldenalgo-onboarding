@@ -7,72 +7,93 @@ import japgolly.scalajs.react.feature.ReactFragment
 import japgolly.scalajs.react.vdom.VdomElement
 import japgolly.scalajs.react.vdom.html_<^._
 import japgolly.scalajs.react.extra.router.RouterCtl
+import diode.react.{ ModelProxy, ReactConnectProxy }
+import org.scalajs.dom.ext.KeyCode
 
 object Home {
 
   case class Props(
+      proxy: ModelProxy[Option[Recipe]],
       ctl: RouterCtl[AppRouter.Page]
   )
 
-  def onFieldChange(field: String)(implicit backend: Backend): ReactEventFromInput => Callback = e =>
-    Callback {
-      field match {
-        case "name"         => backend.setRecipeName(e.target.value)
-        case "ingredients"  => backend.setRecipeIngredients(e.target.value)
-        case "instructions" => backend.setRecipeInstructions(e.target.value)
-        case _              =>
+  case class State(editRecipe: Recipe)
+
+  class Backend($ : BackendScope[Props, State]) {
+    def mounted(props: Props) = Callback {}
+
+    def onSubmitButtonPressed(dispatch: Action => Callback)(currentRecipe: Recipe): Option[Callback] =
+      if (currentRecipe.name.trim.nonEmpty && currentRecipe.ingredients.nonEmpty)
+        Some(
+          dispatch(SetRecipe(currentRecipe)) >>
+          Callback.alert("Succefully received recipe!")
+        )
+      else None
+
+    def editFieldChanged(field: RecipeField): ReactEventFromInput => Callback = e =>
+      Callback(e.persist()) >> $.modState { s =>
+        s.copy(editRecipe = field match {
+          case RecipeName         => s.editRecipe.copy(name = e.target.value)
+          case RecipeIngredients  => s.editRecipe.copy(ingredients = e.target.value.split("\n").toSeq)
+          case RecipeInstructions => s.editRecipe.copy(instructions = e.target.value.split("\n").toSeq)
+        })
       }
+
+    def render(p: Props, s: State): VdomElement = {
+      val proxy                        = p.proxy()
+      val dispatch: Action => Callback = p.proxy.dispatchCB
+
+      <.div(
+        ^.padding         := "250px",
+        ^.textAlign       := "center",
+        ^.backgroundColor := "#d5aca3",
+        <.h2("My Awesome Recipe"),
+        <.br,
+        <.p(
+          "Current Circuit Recipe = ",
+          <.b(proxy.map(_.toString))
+        ),
+        <.p(
+          "Current State Recipe = ",
+          <.b(s.editRecipe.toString)
+        ),
+        <.input.text(
+          ^.onChange ==> editFieldChanged(RecipeName),
+          ^.placeholder := "Pizza a la leña",
+          ^.autoFocus   := true,
+          ^.size        := 50
+        ),
+        <.br,
+        <.textarea(
+          ^.onChange ==> editFieldChanged(RecipeIngredients),
+          ^.placeholder := "Harina\nTomates\n..."
+        ),
+        <.br,
+        <.textarea(
+          ^.onChange ==> editFieldChanged(RecipeInstructions),
+          ^.placeholder := "1)...\n2)...\n3)..."
+        ),
+        <.br,
+        <.button(
+          "SUBMIT",
+          ^.onClick -->? onSubmitButtonPressed(dispatch)(s.editRecipe)
+        ),
+        <.br,
+        <.button(
+          "GET RECIPE ID 00",
+          ^.onClick --> dispatch(LoadRecipe("00"))
+        )
+      )
     }
+  }
 
-  def onSubmitButton()(implicit backend: Backend): Callback = for {
-    _ <- Callback(backend.setRecipeId())
-    _ <- Callback.alert("Recipe posted!")
-    // _ <- Callback(backend.resetRecipe())
-  } yield ()
-
-  def component(implicit backend: Backend) =
+  def component =
     ScalaComponent
       .builder[Props]("Home")
-      .render_P { p =>
-        <.div(
-          <.h2("My Awesome Recipe", ^.textAlign := "center"),
-          <.br,
-          <.p(
-            "Current Recipe = ",
-            <.b(backend.recipe.toString),
-            ^.textAlign := "center"
-          ),
-          <.form(
-            ^.textAlign := "center",
-            ^.onSubmit --> onSubmitButton(),
-            <.input.text(
-              ^.onChange ==> onFieldChange("name"),
-              ^.value := backend.recipe.name,
-              ^.size  := 50
-            ),
-            <.br,
-            <.input.text(
-              ^.onChange ==> onFieldChange("ingredients"),
-              ^.placeholder := "Ingredients: chickpeas, lettuce, ...",
-              ^.value       := backend.recipe.ingredients.mkString(", "),
-              ^.size        := 50
-            ),
-            <.br,
-            <.input.text(
-              ^.onChange ==> onFieldChange("instructions"),
-              ^.placeholder := "Steps: 1, 2, 3, ...",
-              ^.value       := backend.recipe.instructions.mkString(", "),
-              ^.size        := 50
-            ),
-            <.br,
-            <.input.submit()
-          )
-        )
-      }
+      .initialStateFromProps(props => State(Recipe("", "", Nil, Nil)))
+      .renderBackend[Backend]
       .build
 
-  def apply(
-      backend: Backend,
-      ctl: RouterCtl[AppRouter.Page]
-  ): VdomElement = component(backend)(Props(ctl))
+  def apply(ctl: RouterCtl[AppRouter.Page]): VdomElement = AppCircuit.recipeProxy(p => component(Props(p, ctl)))
+
 }

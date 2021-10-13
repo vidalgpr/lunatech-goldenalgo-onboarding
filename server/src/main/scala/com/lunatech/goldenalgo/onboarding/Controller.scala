@@ -4,18 +4,18 @@ import akka.actor.ActorSystem
 import akka.stream.Materializer
 import akka.event.LoggingAdapter
 import akka.http.scaladsl.server.Directives._
-import akka.http.scaladsl.server.{Route, StandardRoute}
+import akka.http.scaladsl.server.{ Route, StandardRoute }
 import akka.http.scaladsl.model._
 import io.circe.syntax._
 import io.circe.parser.decode
 import com.sksamuel.elastic4s.circe._
-import com.sksamuel.elastic4s.{RequestSuccess, RequestFailure}
+import com.sksamuel.elastic4s.{ RequestFailure, RequestSuccess }
 import com.sksamuel.elastic4s.requests.update.UpdateResponse
 import com.sksamuel.elastic4s.requests.indexes.IndexResponse
 import com.sksamuel.elastic4s.Response
 import scala.concurrent.ExecutionContext
 import scala.concurrent.duration._
-import scala.util.{Success, Failure}
+import scala.util.{ Failure, Success }
 import scala.concurrent.Future
 import com.lunatech.goldenalgo.onboarding.adapter.DBConnector
 
@@ -42,7 +42,7 @@ class Controller()(
   def upsertRecipeRoute(
       f: Recipe => Future[Response[Either[UpdateResponse, IndexResponse]]]
   ) = (request: HttpRequest, log: LoggingAdapter) => {
-    val entity = request.entity
+    val entity       = request.entity
     val strictEntity = entity.toStrict(2.seconds)
     val recipe = strictEntity
       .map(_.data.utf8String)
@@ -113,10 +113,10 @@ class Controller()(
   }
 
   lazy val routes: Route = concat(
-    path("api" / "search_recipes" / "all")(getAllRecipesRoute),
-    path("api" / "search_recipes")(getRecipeRoute),
-    path("api" / "upload_recipe")(postRecipeRoute),
-    path("api" / "delete_recipe")(deleteRecipeRoute),
-    path("api" / "update_recipe")(updateRecipeRoute)
+    path("api" / "recipe" / "get" / "all")(getAllRecipesRoute),
+    path("api" / "recipe" / "get")(getRecipeRoute),
+    path("api" / "recipe" / "post")(postRecipeRoute),
+    path("api" / "recipe" / "delete")(deleteRecipeRoute),
+    path("api" / "recipe" / "put")(updateRecipeRoute)
   )
 }

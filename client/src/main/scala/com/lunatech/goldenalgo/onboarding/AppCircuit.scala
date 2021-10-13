@@ -13,10 +13,12 @@ object AppCircuit extends Circuit[AppModel] with ReactConnector[AppModel] {
 
   val counterHandler = new ActionHandler(zoomTo(_.recipe)) {
     override def handle = {
-      case InitRecipe   => updated(Some(Recipe("0", "_init", Nil, Nil)))
-      case ResetRecipe  => updated(Some(Recipe("-1", "_reset", Nil, Nil)))
-      case SetRecipe(r) => updated(value.map(_ => r.copy(id = RecipeId.random)))
-      case LoadRecipe(id) => effectOnly(BackendService.fetchRecipeByIdEffect(id))
+      case InitRecipe      => updated(Some(Recipe("0", "_init", Nil, Nil)))
+      case ResetRecipe     => updated(Some(Recipe("-1", "_reset", Nil, Nil)))
+      case SetRecipe(r)    => updated(value.map(_ => r))
+      case SetNewRecipe(r) => updated(value.map(_ => r.copy(id = RecipeId.random)))
+      case LoadRecipe(id)  => effectOnly(BackendService.fetchRecipeByIdEffect(id))
+      case PostRecipe      => effectOnly(BackendService.postRecipe(value.get))
       // case UpdateRecipeName(id, name)                 => updated(value.map(_.copy(name = name)))
       // case UpdateRecipeIngredients(id, ingredients)   => updated(value.map(_.copy(ingredients = ingredients)))
       // case UpdateRecipeInstructions(id, instructions) => updated(value.map(_.copy(instructions = instructions)))
@@ -25,4 +27,4 @@ object AppCircuit extends Circuit[AppModel] with ReactConnector[AppModel] {
   val actionHandler: HandlerFunction = composeHandlers(counterHandler)
 
   val recipeProxy: ReactConnectProxy[Option[Recipe]] = AppCircuit.connect(_.recipe)
-} 
+}

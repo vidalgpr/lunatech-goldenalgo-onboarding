@@ -17,7 +17,7 @@ object Home {
       ctl: RouterCtl[AppRouter.Page]
   )
 
-  case class State(editRecipe: Recipe, editId: String)
+  case class State(editRecipe: Recipe, editId: String, receivedRecipes: Seq[Recipe])
 
   class Backend($ : BackendScope[Props, State]) {
     def mounted(props: Props) = Callback {}
@@ -38,6 +38,15 @@ object Home {
           Callback.info("Showing found recipes!")
         )
       else None
+  
+    // def onShowAllRecipesButtonPressed(dispatch: Action => Callback): Callback = 
+    //   $.modState(_.copy(receivedRecipes = BackendService.fetchRecipes())
+
+    def handleNewIdKeyDown(dispatch: Action => Callback): ReactKeyboardEventFromInput => Option[Callback] = e => {
+      val id = e.target.value.trim
+      if (e.nativeEvent.keyCode == KeyCode.Enter && id.nonEmpty) onSearchByIdButtonPressed(dispatch)(id)
+      else None
+    }
 
     val editIdFieldChanged: ReactEventFromInput => Callback = e =>
       Callback(e.persist()) >> $.modState(s => s.copy(editId = e.target.value))
@@ -51,6 +60,22 @@ object Home {
         })
       }
 
+    def recipesList(recipes: Seq[Recipe]) =
+      <.section(
+        ^.textAlign := "left",
+        <.ul(
+          recipes.toTagMod { recipe =>
+            <.li(
+              <.div(
+                <.label(
+                  recipe.toString
+                )
+              )
+            )
+          }
+        )
+      )
+
     def render(p: Props, s: State): VdomElement = {
       val proxy                        = p.proxy()
       val dispatch: Action => Callback = p.proxy.dispatchCB
@@ -58,24 +83,28 @@ object Home {
       <.div(
         <.h1("My Awesome Recipe"),
         ^.textAlign := "center",
-        <.p(
-          "Current Circuit Recipe",
-          <.br,
-          <.b(proxy.map(_.toString))
+        <.header(
+          <.h5("Search by ID:"),
+          <.input.text(
+            ^.onChange ==> editIdFieldChanged,
+            ^.placeholder := "my-recipe-id",
+            ^.autoFocus   := true,
+            ^.size        := 33,
+            ^.onKeyDown ==>? handleNewIdKeyDown(dispatch)
+          ),
+          <.button(
+            "GET RECIPE",
+            ^.onClick -->? onSearchByIdButtonPressed(dispatch)(s.editId)
+          )
         ),
         <.div(
           ^.padding         := "32px",
           ^.textAlign       := "center",
           ^.backgroundColor := "#cfd5a9",
-          <.h3("Upload your recipe here"),
-          <.p(
-            "Current Recipe State = ",
-            <.b(s.editRecipe.toString)
-          ),
+          <.h3("Edit and Upload your recipe here"),
           <.input.text(
             ^.onChange ==> editFieldChanged(RecipeName),
             ^.placeholder := "Pizza a la leña",
-            ^.autoFocus   := true,
             ^.size        := 50
           ),
           <.br,
@@ -100,34 +129,44 @@ object Home {
           ^.backgroundColor := "#c2d25e",
           <.br,
           <.h3("Retrieve recipes here:"),
-          <.p(
-            "Current ID State = ",
-            <.b(s.editId)
-          ),
-          <.h5("Search by ID:"),
-          <.input.text(
-            ^.onChange ==> editIdFieldChanged,
-            ^.placeholder := "my-recipe-id",
-            ^.size        := 50
-          ),
-          <.button(
-            "GET RECIPE",
-            ^.onClick -->? onSearchByIdButtonPressed(dispatch)(s.editId)
-          ),
           <.br,
           <.button(
             "SHOW ALL",
-            ^.onClick -->? onSearchByIdButtonPressed(dispatch)(s.editId)
+            // ^.onClick -->? onShowAllRecipesButtonPressed(dispatch)(s.editId)
           ),
+          <.br,
+          recipesList(s.receivedRecipes)
+        ),
+        <.footer(
+          <.h6("[DEBUG] State and Circuit Model"),
+          <.p("Current ID State = ", <.b(s.editId)),
+          <.p(
+            "Current Recipe State =",
+            <.b(s.editRecipe.toString)
+          ),
+          <.p(
+            "Current Circuit Recipe",
+            <.b(proxy.map(_.toString))
+          ),
+          ^.fontSize     := "11px",
+          ^.alignContent := "left",
+          ^.paddingTop := "20px"
         )
       )
+
     }
   }
 
   def component =
     ScalaComponent
       .builder[Props]("Home")
-      .initialStateFromProps(props => State(Recipe("", "", Nil, Nil), "-1"))
+      .initialStateFromProps(props =>
+        State(
+          Recipe("", "", Nil, Nil),
+          "-1",
+          Seq(Recipe("0", "sa", Nil, Nil), Recipe("1", "ds", Nil, Nil))
+        )
+      )
       .renderBackend[Backend]
       .build
 

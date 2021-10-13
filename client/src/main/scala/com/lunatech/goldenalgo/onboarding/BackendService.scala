@@ -11,10 +11,15 @@ object BackendService {
 
   val base = "http://127.0.0.1:8080"
 
-  def fetchRecipes(): Unit = Ajax.get("/recipes").onComplete {
-    case Success(xhr) => decode[List[Recipe]](xhr.responseText)
-    case Failure(t)   => println("An error has occurred: " + t.getMessage)
-  }
+  // def fetchAllRecipes(): Unit = Effect(Ajax.get(s"$base/api/recipe/all").map { xhr =>
+  //   decode[Seq[Recipe]](xhr.responseText).fold(
+  //     err => ResetRecipe,
+  //     _ match {
+  //       case Nil    => ResetRecipe
+  //       case r :: c => LoadRecipes(r)
+  //     }
+  //   )
+  // })
 
   def fetchRecipeByIdEffect(id: String) = Effect(Ajax.get(s"$base/api/recipe/get?id=$id").map { xhr =>
     decode[Seq[Recipe]](xhr.responseText).fold(

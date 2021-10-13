@@ -8,6 +8,7 @@ case class Recipe(id: String, name: String, ingredients: Seq[String], instructio
 
 object Recipe {
   implicit val codec: Codec[Recipe] = deriveCodec[Recipe]
+  val empty = Recipe("", "", Nil, Nil)
 }
 
 object RecipeId {

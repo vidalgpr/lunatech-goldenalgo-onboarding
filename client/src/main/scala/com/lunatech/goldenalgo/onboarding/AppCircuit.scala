@@ -9,22 +9,23 @@ import diode.react.ReactConnectProxy
   * `Circuit`
   */
 object AppCircuit extends Circuit[AppModel] with ReactConnector[AppModel] {
-  def initialModel = AppModel(None)
+  def initialModel = AppModel(Nil)
 
-  val counterHandler = new ActionHandler(zoomTo(_.recipe)) {
+  val counterHandler = new ActionHandler(zoomTo(_.recipes)) {
     override def handle = {
-      case InitRecipe      => updated(Some(Recipe("0", "_init", Nil, Nil)))
-      case ResetRecipe     => updated(Some(Recipe("-1", "_reset", Nil, Nil)))
-      case SetRecipe(r)    => updated(value.map(_ => r))
-      case SetNewRecipe(r) => updated(value.map(_ => r.copy(id = RecipeId.random)))
-      case LoadRecipe(id)  => effectOnly(BackendService.fetchRecipeByIdEffect(id))
-      case PostRecipe      => effectOnly(BackendService.postRecipe(value.get))
-      // case UpdateRecipeName(id, name)                 => updated(value.map(_.copy(name = name)))
-      // case UpdateRecipeIngredients(id, ingredients)   => updated(value.map(_.copy(ingredients = ingredients)))
-      // case UpdateRecipeInstructions(id, instructions) => updated(value.map(_.copy(instructions = instructions)))
+      case InitRecipe             => updated(Recipe.empty :: Nil)
+      case ResetRecipe            => updated(Recipe.empty :: Nil)
+      case SetSingleRecipe(r)     => updated(r :: Nil)
+      case SetMultipleRecipes(rs) => updated(rs)
+      case SetNewRecipe(r)        => updated(r.copy(id = RecipeId.random) :: Nil)
+      case LoadSingleRecipe(id)   => effectOnly(BackendService.fetchRecipeByIdEffect(id))
+      case PostRecipe             => effectOnly(BackendService.postRecipe(value.headOption))
+      case UpdateRecipe           => effectOnly(BackendService.updateRecipe(value.headOption))
+      case DeleteRecipe           => effectOnly(BackendService.deleteRecipe(value.headOption))
+      case LoadAllRecipes         => effectOnly(BackendService.fetchAllRecipes())
     }
   }
   val actionHandler: HandlerFunction = composeHandlers(counterHandler)
 
-  val recipeProxy: ReactConnectProxy[Option[Recipe]] = AppCircuit.connect(_.recipe)
+  val recipesProxy: ReactConnectProxy[Seq[Recipe]] = AppCircuit.connect(_.recipes)
 }

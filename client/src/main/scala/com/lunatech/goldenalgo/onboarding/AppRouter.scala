@@ -15,7 +15,7 @@ object AppRouter {
 
     import dsl._
 
-    val homeRoute = staticRoute(root, Page.Home) ~> renderR(ctl => Home(ctl))
+    val homeRoute = staticRoute(root, Page.Home) ~> renderR(Home(_))
     val notFound = staticRoute("#notfound", Page.NotFound) ~> render(<.h2("NOT FOUND"))
 
     homeRoute.notFound { _ =>

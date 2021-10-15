@@ -7,7 +7,6 @@ package com.lunatech.goldenalgo.onboarding
 import akka.actor.ActorSystem
 import scala.concurrent.ExecutionContext
 import com.lunatech.goldenalgo.onboarding.adapter.DBConnector
-import akka.stream.Materializer
 
 object Main {
 
@@ -18,7 +17,6 @@ object Main {
     val dbIndex = env.get("DB_INDEX") //required
 
     implicit val system: ActorSystem = ActorSystem("main-system")
-    implicit val materializer: Materializer = Materializer(system)
     implicit val ec: ExecutionContext = system.dispatcher
     
     implicit val dbClient = new DBConnector(dbHost, dbIndex)

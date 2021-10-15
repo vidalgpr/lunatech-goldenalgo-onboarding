@@ -1,10 +1,10 @@
 package com.lunatech.goldenalgo.onboarding
 
 import akka.actor.ActorSystem
-import akka.stream.Materializer
 import akka.event.LoggingAdapter
 import akka.http.scaladsl.server.Directives._
 import akka.http.scaladsl.server.{ Route, StandardRoute }
+import akka.http.scaladsl.unmarshalling._
 import akka.http.scaladsl.model._
 import io.circe.syntax._
 import io.circe.parser.decode
@@ -23,7 +23,6 @@ class Controller()(
     implicit val ec: ExecutionContext,
     implicit val db: DBConnector,
     implicit val system: ActorSystem,
-    implicit val matz: Materializer
 ) {
 
   def toHttpEntity(payload: String) =
@@ -39,34 +38,26 @@ class Controller()(
         .map(toHttpEntity)
     )
 
-  def upsertRecipeRoute(
+  def outboundDataRecipeRoute(
       f: Recipe => Future[Response[Either[UpdateResponse, IndexResponse]]]
   ) = (request: HttpRequest, log: LoggingAdapter) => {
-    val entity       = request.entity
-    val strictEntity = entity.toStrict(2.seconds)
-    val recipe = strictEntity
-      .map(_.data.utf8String)
-      .map(decode[Recipe](_))
+    val requestRecipe = Unmarshal(request).to[Recipe]
+    onComplete(requestRecipe) {
+      case Success(recipe) =>
+        log.info(s"Got recipe: $recipe")
+        complete(
+          f(recipe).map {
+            case RequestSuccess(status, body, headers, result) =>
+              val docId = result.fold(_.id, _.id)
+              log.info(s"successfully updated id=$docId")
+              StatusCodes.Created
 
-    onComplete(recipe) {
-      _.flatMap(_.toTry) match {
-        case Success(recipe) =>
-          log.info(s"Got recipe: $recipe")
-          complete(
-            f(recipe).map {
-              case RequestSuccess(status, body, headers, result) =>
-                val docId = result.fold(_.id, _.id)
-                log.info(s"successfully updated id=$docId")
-                StatusCodes.Created
-
-              case RequestFailure(status, body, headers, error) =>
-                log.error(s"$status error updating recipe $error")
-                StatusCodes.InternalServerError
-            }
-          )
-
-        case Failure(ex) => failWith(ex)
-      }
+            case RequestFailure(status, body, headers, error) =>
+              log.error(s"$status error updating recipe $error")
+              StatusCodes.InternalServerError
+          }
+        )
+      case Failure(ex) => failWith(ex)
     }
   }
 
@@ -95,11 +86,11 @@ class Controller()(
 
   lazy val updateRecipeRoute =
     (put & pathEndOrSingleSlash & extractRequest & extractLog) {
-      upsertRecipeRoute(r => db.updateDocumentById(r, r.id).map(_.map(Left(_))))
+      outboundDataRecipeRoute(r => db.updateDocumentById(r, r.id).map(_.map(Left(_))))
     }
   lazy val postRecipeRoute =
     (post & pathEndOrSingleSlash & extractRequest & extractLog) {
-      upsertRecipeRoute(r => db.indexWithId(r, r.id).map(_.map(Right(_))))
+      outboundDataRecipeRoute(r => db.indexWithId(r, r.id).map(_.map(Right(_))))
     }
 
   lazy val deleteRecipeRoute: Route = delete {
